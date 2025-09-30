@@ -1,0 +1,144 @@
+import { useEffect, useRef, useState } from "react";
+import { useRecoilState } from "recoil";
+import {
+  interviewIdState,
+  questionsState,
+  currentIndexState,
+  statusState,
+} from "../chatbox/interviewAtoms";
+import { WS_API_URL } from "../../config";
+import { ServerMessageType } from "../../../../backend/src/utils/messages.types";
+
+export function useSocketManager() {
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Recoil state
+  const [interviewId] = useRecoilState(interviewIdState);
+  const [questions, setQuestions] = useRecoilState(questionsState);
+  const [currentIndex, setCurrentIndex] = useRecoilState(currentIndexState);
+  const [status, setStatus] = useRecoilState(statusState);
+
+  // Explicit connection status
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("disconnected");
+
+  // --- Connection management ---
+  const connect = () => {
+    if (wsRef.current) return; // already connected
+
+    setConnectionStatus("connecting");
+    const ws = new WebSocket(WS_API_URL, []); // cookies auto-sent if same domain
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected");
+      setConnectionStatus("connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case ServerMessageType.AUTH_SUCCESS:
+            console.log("🔐 Authenticated");
+            break;
+
+          case ServerMessageType.QUESTION:
+            setQuestions((prev) => [...prev, data.payload]);
+            setCurrentIndex((i) => i + 1);
+            break;
+
+          case ServerMessageType.TIME_UPDATE: // ⏱ handle per-second updates
+            setQuestions((prev) =>
+              prev.map((q) =>
+                q.id === data.payload.questionId
+                  ? { ...q, timeLeft: data.payload.timeLeft }
+                  : q
+              )
+            );
+            break;
+
+          case ServerMessageType.INTERVIEW_STATE:
+            if (data.payload?.questions) setQuestions(data.payload.questions);
+            if (data.payload?.status) setStatus(data.payload.status);
+            if (typeof data.payload?.currentIndex === "number") {
+              setCurrentIndex(data.payload.currentIndex);
+            }
+            break;
+
+          case ServerMessageType.COMPLETED:
+            setStatus("completed");
+            console.log("📄 Report:", data.report);
+            break;
+
+          case ServerMessageType.ERROR:
+            console.error("❌ WS Error:", data.payload);
+            break;
+
+          case ServerMessageType.INFO:
+            console.info("ℹ️ WS Info:", data.payload);
+            break;
+
+          default:
+            console.warn("⚠️ Unknown WS message:", data);
+        }
+      } catch (err) {
+        console.error("❌ Failed to parse WS message:", err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("🔌 WebSocket closed");
+      wsRef.current = null;
+      setConnectionStatus("disconnected");
+    };
+
+    ws.onerror = () => {
+      console.error("⚠️ WebSocket error");
+      setConnectionStatus("disconnected");
+    };
+  };
+
+  useEffect(() => {
+    connect();
+
+    return () => {
+      wsRef.current?.close();
+      wsRef.current = null;
+      setConnectionStatus("disconnected");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const retry = () => {
+    wsRef.current?.close();
+    wsRef.current = null;
+    connect();
+  };
+
+  // --- Manual send function ---
+  const sendMessage = (msg: object) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    } else {
+      console.warn("⚠️ WebSocket not connected");
+    }
+  };
+
+  return {
+    // manual send
+    sendMessage,
+
+    // exposed states
+    status,
+    questions, // now includes live timeLeft updates
+    currentIndex,
+    interviewId,
+    connectionStatus,
+
+    // connection utils
+    retry,
+  };
+}
