@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { Send, MessageSquare } from "lucide-react";
 import Message from "./Message";
 import ConnectionStatus from "./ConnectionStatus";
-import { useSocketManager } from "../socketManager/useSocketManager";
+import { useSocketManager } from "./socketManager/useSocketManager";
 import { useRecoilState } from "recoil";
 import { useParams } from "react-router-dom";
 import { interviewIdState } from "../chatbox/interviewAtoms";
 import { ClientMessageType } from "../../../../backend/src/utils/messages.types";
+import Timeleft from "./Timeleft";
 
 const ChatInterface = () => {
   const {
@@ -16,6 +17,7 @@ const ChatInterface = () => {
     currentIndex,
     sendMessage,
     interviewId,
+    timeLeft,
   } = useSocketManager();
 
   const [input, setInput] = useState("");
@@ -24,6 +26,7 @@ const ChatInterface = () => {
   const { interviewId: interviewIdParam } = useParams<{
     interviewId: string;
   }>();
+  const [hasRequested, setHasRequested] = useState(false);
 
   // ✅ Take interviewId from route and store in Recoil
   useEffect(() => {
@@ -34,20 +37,26 @@ const ChatInterface = () => {
 
   // ✅ Auto-start interview once connected
   useEffect(() => {
-    if (connectionStatus === "connected" && interviewId) {
+    if (connectionStatus === "connected" && interviewId && !hasRequested) {
       sendMessage({
-        type: ClientMessageType.GET_QUESTION, // 👈 ask for first question
+        type: ClientMessageType.GET_QUESTION,
         payload: { interviewId },
       });
       setLoading(false);
+      setHasRequested(true); // ✅ prevent future calls
     }
-  }, [connectionStatus, interviewId, sendMessage]);
+  }, [connectionStatus, interviewId, sendMessage, hasRequested]);
 
   const handleSend = () => {
+    console.log(input);
     if (!input.trim() || !interviewId) return;
     sendMessage({
       type: ClientMessageType.ANSWER,
       payload: { interviewId, answer: input, score: 0 },
+    });
+    sendMessage({
+      type: ClientMessageType.GET_ANSWERED,
+      payload: { interviewId },
     });
     setInput("");
   };
@@ -88,11 +97,7 @@ const ChatInterface = () => {
         </div>
 
         {/* Right side → show timer if question has timeLeft */}
-        {questions[currentIndex]?.timeLeft !== undefined && (
-          <div className="text-sm font-medium text-gray-700">
-            ⏱ {questions[currentIndex].timeLeft}s
-          </div>
-        )}
+        <Timeleft time={timeLeft ?? "-"} />
       </div>
 
       {/* Messages */}
@@ -101,7 +106,7 @@ const ChatInterface = () => {
           {questions.map((q, idx) => (
             <div key={q.id} className="space-y-2">
               <Message
-                message={q.statement}
+                message={q.text}
                 type="question"
                 isUser={false}
                 status="sent"
@@ -109,7 +114,7 @@ const ChatInterface = () => {
               />
               {q.answer && (
                 <Message
-                  message={q.answer}
+                  message={q.text}
                   type="answer"
                   isUser={true}
                   status="sent"

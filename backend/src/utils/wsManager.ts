@@ -3,6 +3,7 @@ import { Server } from "http";
 import { handleWSMessage } from "./wsMessageHandler";
 import cookie from "cookie";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { ServerMessageType } from "./messages.types";
 // Extend WebSocket type to include user info
 export interface AuthenticatedWebSocket extends WebSocket {
   user?: {
@@ -57,20 +58,47 @@ export function setupWebSocketServer(server: Server) {
 
       clients.set(payload.userId, ws);
 
-      ws.send(JSON.stringify({ type: "auth_success" }));
+      if (!ws.ticker) {
+        ws.ticker = setInterval(() => {
+          ws.send(
+            JSON.stringify({
+              type: ServerMessageType.INFO,
+              payload: `Server time: ${new Date().toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}`,
+            })
+          );
+        }, 1000);
+      }
     });
 
     ws.on("message", (message: WebSocket.RawData) => {
+      console.log("MESSAGE");
       handleWSMessage(ws, message.toString());
     });
 
     ws.on("close", () => {
+      if (ws.ticker) {
+        clearInterval(ws.ticker);
+        ws.ticker = undefined;
+      }
       if (ws.user?.userId) {
         clients.delete(ws.user.userId);
         console.log(`WebSocket closed for user ${ws.user.userId}`);
       }
     });
   });
+}
+
+export function sendToUser(userId: number, message: object) {
+  const client = clients.get(userId);
+  if (client && client.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify(message));
+  } else {
+    console.warn(`❌ No active WebSocket for user ${userId}`);
+  }
 }
 
 export function getClients() {

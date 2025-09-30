@@ -12,11 +12,8 @@ export class InterviewManager {
   status: InterviewStatus;
   currentIndex: number;
 
-  constructor(questions: BaseQuestion[], user: User) {
-    this.questions = questions.map((q) => ({
-      ...q,
-      timeLeft: difficultyTime[q.difficulty],
-    }));
+  constructor(user: User) {
+    this.questions = [];
     this.user = user;
     this.status = InterviewStatus.READY;
     this.currentIndex = 0;
@@ -97,11 +94,19 @@ export class InterviewManager {
       totalScore: this.questions.reduce((sum, q) => sum + q.score, 0),
       questions: this.questions.map((q) => ({
         id: q.id,
-        text: q.statement,
+        text: q.text,
         answer: q.answer ?? "",
         score: q.score,
         difficulty: q.difficulty,
       })),
     };
+  }
+
+  // ✅ Add a new question dynamically
+  addQuestion(question: BaseQuestion) {
+    this.questions.push({
+      ...question,
+      timeLeft: difficultyTime[question.difficulty],
+    });
   }
 }

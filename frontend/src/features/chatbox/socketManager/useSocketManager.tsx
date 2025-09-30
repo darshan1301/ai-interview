@@ -5,9 +5,9 @@ import {
   questionsState,
   currentIndexState,
   statusState,
-} from "../chatbox/interviewAtoms";
-import { WS_API_URL } from "../../config";
-import { ServerMessageType } from "../../../../backend/src/utils/messages.types";
+} from "../interviewAtoms";
+import { WS_API_URL } from "../../../config";
+import { ServerMessageType } from "../../../../../backend/src/utils/messages.types";
 
 export function useSocketManager() {
   const wsRef = useRef<WebSocket | null>(null);
@@ -17,11 +17,15 @@ export function useSocketManager() {
   const [questions, setQuestions] = useRecoilState(questionsState);
   const [currentIndex, setCurrentIndex] = useRecoilState(currentIndexState);
   const [status, setStatus] = useRecoilState(statusState);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Explicit connection status
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected"
   >("disconnected");
+
+  // 👉 Local state for server time/info messages
+  const [serverTime, setServerTime] = useState<string>("");
 
   // --- Connection management ---
   const connect = () => {
@@ -50,15 +54,20 @@ export function useSocketManager() {
             setCurrentIndex((i) => i + 1);
             break;
 
-          case ServerMessageType.TIME_UPDATE: // ⏱ handle per-second updates
+          case ServerMessageType.TIME_UPDATE: {
+            const { questionId, timeLeft } = data.payload;
+            console.log(data.payload);
+
+            // store time left separately
+            setTimeLeft(timeLeft);
+
+            // optional: still update the questions array if you want history
             setQuestions((prev) =>
-              prev.map((q) =>
-                q.id === data.payload.questionId
-                  ? { ...q, timeLeft: data.payload.timeLeft }
-                  : q
-              )
+              prev.map((q) => (q.id === questionId ? { ...q, timeLeft } : q))
             );
+
             break;
+          }
 
           case ServerMessageType.INTERVIEW_STATE:
             if (data.payload?.questions) setQuestions(data.payload.questions);
@@ -79,6 +88,12 @@ export function useSocketManager() {
 
           case ServerMessageType.INFO:
             console.info("ℹ️ WS Info:", data.payload);
+            setServerTime(data.payload); // <-- save server time here
+            break;
+
+          case ServerMessageType.ANSWERED_LIST:
+            console.log("✅ Answered questions:", data.payload);
+            // You can store in Recoil or local state
             break;
 
           default:
@@ -118,7 +133,6 @@ export function useSocketManager() {
     connect();
   };
 
-  // --- Manual send function ---
   const sendMessage = (msg: object) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
@@ -132,11 +146,13 @@ export function useSocketManager() {
     sendMessage,
 
     // exposed states
+    timeLeft,
     status,
-    questions, // now includes live timeLeft updates
+    questions,
     currentIndex,
     interviewId,
     connectionStatus,
+    serverTime, // <-- expose it here
 
     // connection utils
     retry,

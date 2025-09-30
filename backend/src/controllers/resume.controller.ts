@@ -116,7 +116,7 @@ export const handleResumeUpload = async (req: Request, res: Response) => {
       isAnswered: (q.isAnswered ?? false) as boolean,
       score: (q.score ?? 0) as number,
     }));
-    const manager = new InterviewManager(mappedQuestions, prepareUser);
+    const manager = new InterviewManager(prepareUser);
     setInterviewSession(interview.id, manager);
 
     return res.json({

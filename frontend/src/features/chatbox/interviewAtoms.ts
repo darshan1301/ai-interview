@@ -4,7 +4,7 @@ export type InterviewStatus = "ready" | "in_progress" | "pause" | "completed";
 
 export interface Question {
   id: string;
-  statement: string;
+  text: string;
   answer: string | null;
   difficulty: "easy" | "medium" | "hard";
   type: "mcq" | "opinion";

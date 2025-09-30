@@ -1,3 +1,5 @@
+import { ClientMessageType, ServerMessageType } from "./messages.types";
+
 export enum MessageType {
   QUESTION = "question",
   ANSWER = "answer",
@@ -11,7 +13,7 @@ export enum Difficulty {
 
 export type BaseQuestion = {
   id: string | number;
-  statement: string;
+  text: string;
   difficulty: Difficulty;
   answer?: string;
   timeLeft: number;
@@ -50,4 +52,27 @@ export enum InterviewStatus {
   PAUSE = "pause",
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
+}
+
+// ===== Payload Types =====
+
+export interface AuthPayload {
+  token: string;
+  interviewId: number;
+}
+
+export interface AnswerPayload {
+  answer: string;
+  score?: number;
+}
+
+export interface InterviewStatePayload {
+  status: string; // from InterviewStatus enum
+  currentIndex: number;
+  currentQuestion?: any; // can be BaseQuestion
+}
+
+export interface WSMessage<T = any> {
+  type: ClientMessageType | ServerMessageType;
+  payload?: T;
 }
