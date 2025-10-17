@@ -13,7 +13,7 @@ const openai = new OpenAI({
 const QuestionSchema = z.object({
   id: z.number(),
   text: z.string(),
-  difficulty: z.enum(["easy"]),
+  difficulty: z.enum(["easy", "medium", "hard"]),
   type: z.enum(["opinion", "MCQ"]),
   options: z.array(z.string()),
 });
