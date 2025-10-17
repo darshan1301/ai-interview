@@ -28,15 +28,8 @@ app.use(
 app.use(morgan("dev"));
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/:interviewId", async (req: Request, res: Response) => {
-  let data = await prisma.interview.findUnique({
-    where: { id: Number(req.params.interviewId) },
-    include: { questions: true, user: true },
-  });
-  // await clearAllInterviewSessions();
-  res.json(data);
-
-  // res.send(`✅ Server is running!`);
+app.get("/", async (req: Request, res: Response) => {
+  res.send("API is health");
 });
 
 app.use("/api/user", userRouter);
