@@ -3,7 +3,6 @@ import { Server } from "http";
 import { handleWSMessage } from "./wsMessageHandler";
 import cookie from "cookie";
 import jwt, { JwtPayload } from "jsonwebtoken";
-import { ServerMessageType } from "./messages.types";
 // Extend WebSocket type to include user info
 export interface AuthenticatedWebSocket extends WebSocket {
   user?: {
@@ -57,25 +56,10 @@ export function setupWebSocketServer(server: Server) {
       };
 
       clients.set(payload.userId, ws);
-
-      if (!ws.ticker) {
-        ws.ticker = setInterval(() => {
-          ws.send(
-            JSON.stringify({
-              type: ServerMessageType.INFO,
-              payload: `Server time: ${new Date().toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}`,
-            })
-          );
-        }, 1000);
-      }
     });
 
     ws.on("message", (message: WebSocket.RawData) => {
-      console.log("MESSAGE");
+      console.log("MESSAGE", message.toString());
       handleWSMessage(ws, message.toString());
     });
 

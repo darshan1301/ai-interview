@@ -34,10 +34,19 @@ export async function setInterviewSession(
   manager: InterviewManager
 ) {
   await connect();
-  await redis.set(`interview:${id}`, JSON.stringify(manager));
+
+  const state = {
+    questions: manager.questions,
+    user: manager.user,
+    status: manager.status,
+    currentIndex: manager.currentIndex,
+  };
+  console.log("MANAGER STATE TO SAVE:", state.status);
+
+  await redis.set(`interview:${id}`, JSON.stringify(state));
 }
 
-// Get
+/// Get
 export async function getInterviewSession(
   id: number
 ): Promise<InterviewManager | null> {
@@ -46,7 +55,14 @@ export async function getInterviewSession(
   if (!data) return null;
 
   const parsed = JSON.parse(data);
-  return new InterviewManager(parsed.user);
+
+  console.log("PARSED INTERVIEW SESSION:", parsed.status);
+
+  // Properly rehydrate manager
+  const mgr = new InterviewManager(parsed.questions, parsed.user);
+  mgr.status = parsed.status;
+  mgr.currentIndex = parsed.currentIndex;
+  return mgr;
 }
 
 //clear all

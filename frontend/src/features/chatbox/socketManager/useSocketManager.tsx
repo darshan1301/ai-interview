@@ -5,9 +5,29 @@ import {
   questionsState,
   currentIndexState,
   statusState,
+  reportState,
+  timeLeftState,
 } from "../interviewAtoms";
 import { WS_API_URL } from "../../../config";
 import { ServerMessageType } from "../../../../../backend/src/utils/messages.types";
+import { InterviewStatus } from "../../../../../backend/src/utils/types";
+
+export type ReportQuestion = {
+  id: number;
+  text: string;
+  answer: string;
+  score: number;
+  difficulty: "easy" | "medium" | "hard";
+  type: string; // e.g. "opinion", "mcq"
+};
+
+export type ReportType = {
+  type: "completed";
+  status: "completed";
+  questions: ReportQuestion[];
+  summary?: string;
+  score: number;
+};
 
 export function useSocketManager() {
   const wsRef = useRef<WebSocket | null>(null);
@@ -17,7 +37,8 @@ export function useSocketManager() {
   const [questions, setQuestions] = useRecoilState(questionsState);
   const [currentIndex, setCurrentIndex] = useRecoilState(currentIndexState);
   const [status, setStatus] = useRecoilState(statusState);
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useRecoilState(timeLeftState);
+  const [report, setReport] = useRecoilState(reportState);
 
   // Explicit connection status
   const [connectionStatus, setConnectionStatus] = useState<
@@ -43,7 +64,7 @@ export function useSocketManager() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-
+        console.log("MESSAGE:", data);
         switch (data.type) {
           case ServerMessageType.AUTH_SUCCESS:
             console.log("🔐 Authenticated");
@@ -55,11 +76,11 @@ export function useSocketManager() {
             break;
 
           case ServerMessageType.TIME_UPDATE: {
-            const { questionId, timeLeft } = data.payload;
-            console.log(data.payload);
+            const { questionId, timeLeft, managerStatus } = data.payload;
 
             // store time left separately
             setTimeLeft(timeLeft);
+            setStatus(managerStatus);
 
             // optional: still update the questions array if you want history
             setQuestions((prev) =>
@@ -78,8 +99,10 @@ export function useSocketManager() {
             break;
 
           case ServerMessageType.COMPLETED:
-            setStatus("completed");
-            console.log("📄 Report:", data.report);
+            setStatus(InterviewStatus.COMPLETED);
+            setReport(data);
+
+            console.log("📄 Report:", data);
             break;
 
           case ServerMessageType.ERROR:
@@ -144,8 +167,11 @@ export function useSocketManager() {
   return {
     // manual send
     sendMessage,
+    setTimeLeft,
+    setQuestions,
 
     // exposed states
+    report,
     timeLeft,
     status,
     questions,

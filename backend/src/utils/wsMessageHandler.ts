@@ -1,10 +1,14 @@
-import { WSMessage } from "./types";
+import { BaseQuestion, InterviewStatus, WSMessage } from "./types";
 import { AuthenticatedWebSocket } from "./wsManager";
-import { getInterviewSession, setInterviewSession } from "../lib/redis";
+import {
+  deleteInterviewSession,
+  getInterviewSession,
+  setInterviewSession,
+} from "../lib/redis";
 import { sendToUser } from "./wsManager";
 import { ClientMessageType, ServerMessageType } from "./messages.types";
 import { prisma } from "../lib/db";
-import { questionGenerator } from "./question.generator";
+import { evaluateInterview, questionGenerator } from "./openai.generator";
 
 export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
   let data: WSMessage;
@@ -23,8 +27,7 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
 
   switch (data.type) {
     case ClientMessageType.ANSWER: {
-      const { interviewId, answer, score = 0 } = data.payload;
-      console.log("ANSWER", ws.user, interviewId, answer);
+      const { interviewId, answer, currentIndex } = data.payload;
 
       if (!interviewId || !ws.user) {
         sendToUser(ws.user?.userId ?? 0, {
@@ -35,6 +38,8 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
       }
 
       let manager = await getInterviewSession(interviewId);
+
+      console.log("/ANSWER-1", answer);
       if (!manager) {
         sendToUser(ws.user.userId, {
           type: ServerMessageType.ERROR,
@@ -43,93 +48,165 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
         return;
       }
 
-      // 1️⃣ Update in memory + Redis
-      const currentQ = manager.getCurrentQuestion();
-      manager.answer(answer, score);
+      // 🚨 Guard: already completed → ignore
+      if (manager.status === InterviewStatus.COMPLETED) {
+        console.log("Interview already completed, ignoring answer.");
+        return;
+      }
+      // 1️⃣ Save in Redis
+      manager.answer(answer);
       await setInterviewSession(interviewId, manager);
 
-      // 2️⃣ Persist asynchronously into DB (non-blocking)
+      // 2️⃣ Persist in DB (blocking, ensure consistency)
+      const currentQ = manager.getCurrentQuestion();
+      console.log(currentQ);
       if (currentQ) {
-        prisma.question
-          .update({
-            where: { id: Number(currentQ.id) },
+        let ans = await prisma.question.update({
+          where: { id: currentQ.id },
+          data: {
+            isAnswered: true,
+            answer,
+            score: 0,
+          },
+        });
+      }
+
+      //clear old timer
+      if (ws.ticker) {
+        clearInterval(ws.ticker);
+        ws.ticker = undefined;
+      }
+
+      // Count answered questions
+      const answeredCount = manager.questions.filter(
+        (q) => q.isAnswered
+      ).length;
+
+      // 2️⃣ If we still need more (max 6)
+      if (answeredCount < 6 && manager.questions.length < 6) {
+        const asked = manager.questions.map((q) => ({
+          id: q.id,
+          text: q.text,
+          difficulty: q.difficulty,
+          type: q.type,
+        }));
+
+        const newQ = await questionGenerator(asked);
+
+        if (newQ) {
+          // Insert into DB
+          const created = await prisma.question.create({
             data: {
-              answer: answer ?? "",
-              isAnswered: true,
-              score,
+              interviewId: Number(interviewId),
+              text: newQ.text,
+              difficulty: newQ.difficulty,
+              type: newQ.type,
+              isAnswered: false,
+              answer: "",
+              score: 0,
             },
-          })
-          .then(() => {
-            console.log(`✅ Question ${currentQ.id} updated in DB`);
-          })
-          .catch((err) => {
-            console.error(`❌ Failed to update question ${currentQ.id}`, err);
           });
-      }
 
-      // 3️⃣ Continue interview flow
-      const nextQ = manager.getCurrentQuestion();
-      if (nextQ) {
-        sendToUser(ws.user.userId, {
-          type: ServerMessageType.QUESTION,
-          payload: nextQ,
-        });
-      } else {
-        sendToUser(ws.user.userId, {
-          type: ServerMessageType.COMPLETED,
-          payload: manager.getReport(),
-        });
-      }
-      break;
-    }
+          // Add to manager + persist
+          let newQue = manager.addQuestion(created as any);
 
-    case ClientMessageType.PAUSE: {
-      const { interviewId } = data.payload;
-      if (!interviewId || !ws.user) return;
-
-      const manager = await getInterviewSession(interviewId);
-      if (manager) {
-        manager.pause();
-        await setInterviewSession(interviewId, manager);
-        sendToUser(ws.user.userId, {
-          type: ServerMessageType.INFO,
-          payload: "Interview paused",
-        });
-      }
-      break;
-    }
-
-    case ClientMessageType.RESUME: {
-      const { interviewId } = data.payload;
-      if (!interviewId || !ws.user) return;
-
-      const manager = await getInterviewSession(interviewId);
-      if (manager) {
-        manager.resume();
-        await setInterviewSession(interviewId, manager);
-
-        sendToUser(ws.user.userId, {
-          type: ServerMessageType.INFO,
-          payload: "Interview resumed",
-        });
-
-        const q = manager.getCurrentQuestion();
-        if (q) {
+          await setInterviewSession(interviewId, manager);
+          console.log("NEW QUE", created.id, interviewId);
+          startTimer(ws, created.id, interviewId);
+          // Send next question + start timer
           sendToUser(ws.user.userId, {
             type: ServerMessageType.QUESTION,
-            payload: q,
+            payload: created,
           });
+          break;
         }
+      } else {
+        // 3️⃣ Completed after 6 questions
+        manager.submit();
+
+        console.log("SUBMIT", manager.status);
+        // Update interview status in DB
+        const interview = await prisma.interview.update({
+          where: { id: Number(interviewId) },
+          data: {
+            status: InterviewStatus.COMPLETED,
+            endTime: new Date(),
+          },
+          include: {
+            questions: true, // ✅ include related questions
+          },
+        });
+
+        await setInterviewSession(interviewId, manager);
+
+        // use non blocking call to get full report
+
+        let llmReport = await evaluateInterview({
+          questions: interview.questions,
+        });
+
+        Promise.resolve()
+          .then(async () => {
+            let result = await prisma.interview.update({
+              where: {
+                id: Number(interviewId),
+              },
+              data: {
+                summary: llmReport?.summary,
+                endTime: new Date(),
+                score: llmReport?.score,
+              },
+            });
+            return result;
+          })
+          .then((result) => {
+            console.log("Success:", result);
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+
+        console.log("REPORT", llmReport);
+        sendToUser(ws.user.userId, {
+          type: ServerMessageType.COMPLETED,
+          status: interview.status,
+          score: llmReport?.score,
+          questions: interview.questions.map((q) => ({
+            id: q.id,
+            text: q.text,
+            answer: q.answer,
+            summary: llmReport?.summary,
+            difficulty: q.difficulty,
+            type: q.type,
+          })),
+        });
+
+        // 🔹 Cleanup Redis session
+        await deleteInterviewSession(interviewId);
       }
+
       break;
     }
 
     case ClientMessageType.GET_INTERVIEW: {
+      console.log("GET_INTERVIEW");
       const { interviewId } = data.payload;
       if (!interviewId || !ws.user) return;
 
-      const manager = await getInterviewSession(interviewId);
-      if (!manager) {
+      const interview = await prisma.interview.findFirst({
+        where: {
+          id: Number(interviewId),
+        },
+        include: {
+          questions: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+        },
+      });
+
+      if (!interview) {
         sendToUser(ws.user.userId, {
           type: ServerMessageType.ERROR,
           payload:
@@ -141,9 +218,9 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
       sendToUser(ws.user.userId, {
         type: ServerMessageType.INTERVIEW_STATE,
         payload: {
-          status: manager.getStatus(),
-          currentIndex: manager.currentIndex,
-          currentQuestion: manager.getCurrentQuestion(),
+          status: interview.status,
+          currentIndex: interview.questions.length - 1,
+          questions: interview.questions,
         },
       });
 
@@ -154,91 +231,155 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
     case ClientMessageType.GET_QUESTION: {
       const { interviewId } = data.payload;
       if (!interviewId || !ws.user) return;
+      console.log("/QUESTION");
 
-      // 1️⃣ Find the first unanswered question
-      let question = await prisma.question.findFirst({
-        where: { interviewId: Number(interviewId), isAnswered: false },
-        orderBy: { id: "asc" },
-      });
+      let manager = await getInterviewSession(interviewId);
+      // ✅ Early exit if interview is already completed
+      if (manager?.getStatus() === InterviewStatus.COMPLETED) {
+        console.log("Interview already completed → sending report");
 
-      // 2️⃣ If none → generate new and insert
-      if (!question) {
-        const gen = await questionGenerator();
-        if (!gen) return;
+        const interview = await prisma.interview.findUnique({
+          where: { id: Number(interviewId) },
+          include: { questions: true },
+        });
 
-        const q = gen;
-        question = await prisma.question.create({
-          data: {
-            interviewId: Number(interviewId),
+        if (!interview) {
+          sendToUser(ws.user.userId, {
+            type: ServerMessageType.ERROR,
+            payload: "Interview not found",
+          });
+          break;
+        }
+
+        sendToUser(ws.user.userId, {
+          type: ServerMessageType.COMPLETED,
+          status: interview.status,
+          score: interview.score,
+          questions: interview.questions.map((q) => ({
+            id: q.id,
             text: q.text,
+            answer: q.answer,
+            score: q.score || 0,
             difficulty: q.difficulty,
             type: q.type,
-            isAnswered: false,
-            answer: "",
-            score: 0,
-          },
+          })),
         });
+
+        break;
       }
 
+      // ✅ If no Redis manager → fallback to DB
+      if (!manager) {
+        const interview = await prisma.interview.findUnique({
+          where: { id: Number(interviewId) },
+          include: { questions: true },
+        });
+
+        if (interview?.status === InterviewStatus.COMPLETED) {
+          console.log("Interview already completed (DB) → sending report");
+          sendToUser(ws.user.userId, {
+            type: ServerMessageType.COMPLETED,
+            status: interview.status,
+            summary: interview.summary,
+            score: interview.score,
+            questions: interview.questions.map((q) => ({
+              id: q.id,
+              text: q.text,
+              answer: q.answer,
+              score: q.score,
+              difficulty: q.difficulty,
+              type: q.type,
+            })),
+          });
+          break;
+        }
+      }
+      let question = manager?.getCurrentQuestion();
+
+      // 🔹 If Redis already has a question, just return it
       if (question) {
         sendToUser(ws.user.userId, {
           type: ServerMessageType.QUESTION,
           payload: question,
         });
-        console.log("QUESTION", question);
-        // start timer loop
+        startTimer(ws, question.id, interviewId);
+        break;
+      }
+
+      const totalQuestions = await prisma.question.count({
+        where: { interviewId: Number(interviewId) },
+      });
+      // ✅ If 6 questions reached but timer still active, don't generate more
+      if (totalQuestions >= 6) {
+        console.log("Maximum 6 questions reached, waiting for timer to expire");
+        sendToUser(ws.user.userId, {
+          type: ServerMessageType.ERROR,
+          payload:
+            "Maximum questions reached. Please answer the current question.",
+        });
+        break;
+      }
+      // 🔹 Otherwise → generate or fetch from DB
+      let dbQ = await prisma.question.findFirst({
+        where: { interviewId: Number(interviewId), isAnswered: false },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (!dbQ) {
+        const gen = await questionGenerator();
+        if (!gen) return;
+
+        // insert new into DB in background (non-blocking)
+        dbQ = await prisma.question.create({
+          data: {
+            interviewId: Number(interviewId),
+            text: gen.text,
+            difficulty: gen.difficulty,
+            type: gen.type,
+            isAnswered: false,
+            answer: "",
+            score: 0,
+          },
+        });
+
+        // create runtime question object with timer
+        dbQ = {
+          id: dbQ.id, // temporary ID (replace with real one after DB insert if needed)
+          interviewId: Number(interviewId),
+          text: gen.text,
+          difficulty: gen.difficulty,
+          type: gen.type,
+          isAnswered: false,
+          answer: "",
+          score: 0,
+        } as any;
+      }
+      console.log("/GET_QUESTION", dbQ);
+
+      // 🔹 Add to manager + Redis
+      // Add to manager + Redis
+      if (manager) {
+        manager.addQuestion(dbQ as any);
+        // Ensure status and index are valid
+        if (manager.getStatus() === InterviewStatus.COMPLETED) {
+          manager.status = InterviewStatus.IN_PROGRESS;
+        }
+        if (manager.currentIndex >= manager.questions.length) {
+          manager.currentIndex = manager.questions.length - 1;
+        }
+
+        await setInterviewSession(interviewId, manager);
+        question = manager.getCurrentQuestion();
+      }
+
+      // 🔹 Send question to frontend
+      if (question) {
+        sendToUser(ws.user.userId, {
+          type: ServerMessageType.QUESTION,
+          payload: question,
+        });
         startTimer(ws, question.id, interviewId);
       }
-      break;
-    }
-
-    case ClientMessageType.GET_ANSWERED: {
-      const { interviewId } = data.payload;
-      console.log("GET_ANSWERED for interview", interviewId);
-
-      if (!interviewId || !ws.user) {
-        ws.send(
-          JSON.stringify({
-            type: ServerMessageType.ERROR,
-            payload: "Not authenticated or invalid interview",
-          })
-        );
-        return;
-      }
-
-      // Fetch answered questions from DB
-      prisma.question
-        .findMany({
-          where: {
-            interviewId: Number(interviewId),
-            isAnswered: true,
-          },
-          orderBy: { id: "asc" },
-          select: {
-            id: true,
-            text: true,
-            answer: true,
-            score: true,
-            difficulty: true,
-          },
-        })
-        .then((answered) => {
-          ws.send(
-            JSON.stringify({
-              type: ServerMessageType.ANSWERED_LIST,
-              payload: answered,
-            })
-          );
-        })
-        .catch((err) => {
-          console.error("❌ Failed to fetch answered questions", err);
-          ws.send(
-            JSON.stringify({
-              type: ServerMessageType.ERROR,
-              payload: "Could not fetch answered questions",
-            })
-          );
-        });
 
       break;
     }
@@ -262,37 +403,52 @@ export async function startTimer(
 ) {
   if (ws.ticker) clearInterval(ws.ticker);
 
-  ws.ticker = setInterval(async () => {
-    // 🔹 Fetch interview manager from Redis
-    const manager = await getInterviewSession(interviewId);
-    if (!manager) return;
+  // fetch once at start
+  let manager = await getInterviewSession(interviewId);
+  if (!manager) return;
+  if (manager.status === InterviewStatus.COMPLETED) return;
 
+  ws.ticker = setInterval(async () => {
     const currentQ = manager.getCurrentQuestion();
     if (!currentQ || currentQ.id !== qId) return;
 
-    // decrement timer
-    const newTime = manager.decrementTimer();
+    // decrement
+    currentQ.timeLeft = Math.max(0, (currentQ.timeLeft ?? 0) - 1);
+    console.log("TICK", currentQ.timeLeft);
 
-    console.log("TICK");
-
-    // persist back to Redis
+    // persist back
     await setInterviewSession(interviewId, manager);
 
     // notify frontend
     sendToUser(ws.user!.userId, {
       type: ServerMessageType.TIME_UPDATE,
-      payload: { questionId: qId, timeLeft: newTime },
+      payload: {
+        questionId: qId,
+        timeLeft: currentQ.timeLeft,
+        managerStatus: manager.status,
+      },
     });
 
-    if (newTime <= 0) {
+    // if timer expired
+    if (currentQ.timeLeft <= 0) {
       clearInterval(ws.ticker!);
       ws.ticker = undefined;
 
-      // auto mark unanswered in Redis
-      manager.answer("", 0);
+      manager.answer("");
+
+      (async () => {
+        try {
+          await prisma.question.update({
+            where: { id: currentQ.id },
+            data: { isAnswered: true, answer: "", score: 0 },
+          });
+        } catch (err) {
+          console.error("❌ Failed to update question in DB:", err);
+        }
+      })();
+
       await setInterviewSession(interviewId, manager);
 
-      // trigger next question generation (simulate ANSWER flow)
       handleWSMessage(
         ws,
         JSON.stringify({

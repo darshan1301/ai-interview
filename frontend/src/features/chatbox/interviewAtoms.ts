@@ -1,6 +1,6 @@
 import { atom } from "recoil";
-
-export type InterviewStatus = "ready" | "in_progress" | "pause" | "completed";
+import { InterviewStatus } from "../../../../backend/src/utils/types";
+import type { ReportType } from "./socketManager/useSocketManager";
 
 export interface Question {
   id: string;
@@ -48,10 +48,20 @@ export const currentIndexState = atom<number>({
 
 export const statusState = atom<InterviewStatus>({
   key: "statusState",
-  default: persist("status", "ready"),
+  default: persist("status", InterviewStatus.READY),
   effects: [
     ({ onSet }) => {
       onSet((val) => localStorage.setItem("status", JSON.stringify(val)));
     },
   ],
+});
+
+export const reportState = atom<ReportType | null>({
+  key: "reportState",
+  default: null,
+});
+
+export const timeLeftState = atom<number | null>({
+  key: "timeLeftState",
+  default: null,
 });

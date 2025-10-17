@@ -8,6 +8,8 @@ import { setupWebSocketServer } from "./utils/wsManager";
 import morgan from "morgan";
 import interviewRouter from "./routes/resume.route";
 import { clearAllInterviewSessions, getInterviewSession } from "./lib/redis";
+import { prisma } from "./lib/db";
+import adminRouter from "./routes/admin.route";
 
 dotenv.config();
 
@@ -26,8 +28,11 @@ app.use(
 app.use(morgan("dev"));
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/", async (req: Request, res: Response) => {
-  let data = await getInterviewSession(1);
+app.get("/:interviewId", async (req: Request, res: Response) => {
+  let data = await prisma.interview.findUnique({
+    where: { id: Number(req.params.interviewId) },
+    include: { questions: true, user: true },
+  });
   // await clearAllInterviewSessions();
   res.json(data);
 
@@ -36,6 +41,7 @@ app.get("/", async (req: Request, res: Response) => {
 
 app.use("/api/user", userRouter);
 app.use("/api/resume", interviewRouter);
+app.use("/api/admin", adminRouter);
 
 const server = http.createServer(app);
 
