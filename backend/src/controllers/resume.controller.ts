@@ -4,9 +4,9 @@ import fsPromises from "fs/promises";
 import path from "path";
 import OpenAI from "openai";
 import { prisma } from "../lib/db";
-import { questionGenerator } from "../utils/question.generator";
 import { InterviewManager } from "../utils/interviewManager";
 import { setInterviewSession } from "../lib/redis";
+import { InterviewStatus } from "../utils/types";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -61,7 +61,7 @@ export const handleResumeUpload = async (req: Request, res: Response) => {
 
     // ✅ Store user + interview
     const user = await prisma.user.findFirst({
-      where: { email: parsed.email },
+      where: { email: req.user?.email },
     });
 
     if (!user) {
@@ -69,35 +69,8 @@ export const handleResumeUpload = async (req: Request, res: Response) => {
     }
 
     const interview = await prisma.interview.create({
-      data: { userId: user.id, status: "ready" },
+      data: { userId: user.id, status: InterviewStatus.READY },
     });
-
-    // ✅ Generate and insert 6 questions
-    const generated = await questionGenerator();
-
-    // Type guard to ensure we have an object with a questions array
-    const hasQuestions = (obj: any): obj is { questions: any[] } =>
-      obj && typeof obj === "object" && Array.isArray(obj.questions);
-
-    if (!hasQuestions(generated)) {
-      console.error("❌ Question generator returned invalid data:", generated);
-      return res.status(500).json({ message: "Question generation failed" });
-    }
-
-    await prisma.$transaction(
-      generated.questions.map((q: any) =>
-        prisma.question.create({
-          data: {
-            interviewId: interview.id,
-            text: q.text,
-            difficulty: q.difficulty,
-            type: q.type,
-            // MCQs get options stored as JSON string
-            ...(q.type === "mcq" ? { answer: "", score: 0 } : {}),
-          },
-        })
-      )
-    );
 
     const prepareUser = {
       id: user.id,
@@ -105,18 +78,8 @@ export const handleResumeUpload = async (req: Request, res: Response) => {
       email: user.email,
       phoneNo: parsed.phone!,
     };
-    // ✅ Put into InterviewManager memory
-    const mappedQuestions = generated.questions.map((q: any) => ({
-      id: q.id,
-      type: q.type,
-      difficulty: q.difficulty,
-      options: q.options ?? [],
-      statement: q.text,
-      timeLeft: (q.timeLeft ?? 60) as number,
-      isAnswered: (q.isAnswered ?? false) as boolean,
-      score: (q.score ?? 0) as number,
-    }));
-    const manager = new InterviewManager(mappedQuestions, prepareUser);
+
+    const manager = new InterviewManager([], prepareUser);
     setInterviewSession(interview.id, manager);
 
     return res.json({

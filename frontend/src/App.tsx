@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import ProtectedRoute from "./features/authentication/checkAuth";
 import Home from "./pages/Home";
 import { RecoilRoot } from "recoil";
+import ViewInterviewPage from "./features/interviewerdashboard/ViewInterviewPage";
 
 const App = () => {
   return (
@@ -37,6 +38,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <Chatbox />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/:candidateId"
+            element={
+              <ProtectedRoute>
+                <ViewInterviewPage />
               </ProtectedRoute>
             }
           />

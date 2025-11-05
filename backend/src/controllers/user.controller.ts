@@ -26,8 +26,6 @@ export async function userLogin(req: Request, res: Response) {
       role: user.role,
     });
 
-    console.log(process.env.JWT_SECRET);
-
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -1,11 +1,13 @@
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw } from "lucide-react";
 
 const ConnectionStatus = ({
   isConnected,
   isConnecting,
+  onRetry,
 }: {
   isConnecting: boolean;
   isConnected: boolean;
+  onRetry?: () => void;
 }) => {
   if (isConnecting) {
     return (
@@ -26,9 +28,17 @@ const ConnectionStatus = ({
   }
 
   return (
-    <div className="flex items-center space-x-1 text-red-500">
+    <div className="flex items-center space-x-2 text-red-500">
       <WifiOff className="w-3 h-3" />
       <span className="text-xs">Disconnected</span>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="ml-1 p-1 hover:bg-red-100 rounded transition-colors"
+          aria-label="Retry connection">
+          <RefreshCw className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 };
