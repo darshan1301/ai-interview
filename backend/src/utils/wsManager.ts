@@ -56,21 +56,33 @@ export function setupWebSocketServer(server: Server) {
       };
 
       clients.set(payload.userId, ws);
-
-      ws.send(JSON.stringify({ type: "auth_success" }));
     });
 
     ws.on("message", (message: WebSocket.RawData) => {
+      console.log("MESSAGE", message.toString());
       handleWSMessage(ws, message.toString());
     });
 
     ws.on("close", () => {
+      if (ws.ticker) {
+        clearInterval(ws.ticker);
+        ws.ticker = undefined;
+      }
       if (ws.user?.userId) {
         clients.delete(ws.user.userId);
         console.log(`WebSocket closed for user ${ws.user.userId}`);
       }
     });
   });
+}
+
+export function sendToUser(userId: number, message: object) {
+  const client = clients.get(userId);
+  if (client && client.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify(message));
+  } else {
+    console.warn(`❌ No active WebSocket for user ${userId}`);
+  }
 }
 
 export function getClients() {

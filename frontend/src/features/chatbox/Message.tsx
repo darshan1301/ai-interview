@@ -4,13 +4,11 @@ const Message = ({
   message,
   type,
   isUser,
-  timestamp,
 }: {
   message: string;
   isUser: boolean;
   type: string;
   status: string;
-  timestamp: Date;
 }) => {
   const getIcon = () => {
     if (isUser) return <User className="w-4 h-4" />;
@@ -35,11 +33,13 @@ const Message = ({
         <div className="flex items-start space-x-2">
           <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
           <div className="flex-1">
-            <p className="text-sm leading-relaxed">{message}</p>
+            {/* 🪄 Renders HTML safely */}
+            <div
+              className="text-sm leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: message }}
+            />
             <div className="flex items-center justify-between mt-1">
-              <p className="text-xs opacity-70">
-                {timestamp.toLocaleTimeString()}
-              </p>
+              {/* optional timestamp or actions */}
             </div>
           </div>
         </div>

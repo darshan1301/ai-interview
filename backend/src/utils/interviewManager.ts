@@ -1,6 +1,6 @@
 import { BaseQuestion, User, InterviewStatus } from "./types";
 
-const difficultyTime: Record<string, number> = {
+export const difficultyTime: Record<string, number> = {
   easy: 20,
   medium: 60,
   hard: 120,
@@ -15,41 +15,22 @@ export class InterviewManager {
   constructor(questions: BaseQuestion[], user: User) {
     this.questions = questions.map((q) => ({
       ...q,
-      timeLeft: difficultyTime[q.difficulty],
+      timeLeft: q.timeLeft ?? difficultyTime[q.difficulty],
     }));
     this.user = user;
     this.status = InterviewStatus.READY;
     this.currentIndex = 0;
   }
 
-  decrementTimer() {
-    if (this.status !== InterviewStatus.IN_PROGRESS) return 0;
-
-    const question = this.questions[this.currentIndex];
-    if (!question) return 0;
-
-    if (question.timeLeft > 0) {
-      question.timeLeft--;
-    }
-    return question.timeLeft;
-  }
-
   answer(answer: string, score: number = 0) {
     const question = this.questions[this.currentIndex];
-    if (!question) return null;
+    if (!question) return false;
 
     question.answer = answer;
     question.timeLeft = 0;
     question.score = score;
-
-    this.currentIndex++;
-
-    if (this.currentIndex >= this.questions.length) {
-      this.status = InterviewStatus.COMPLETED;
-      return null;
-    }
-
-    return this.questions[this.currentIndex];
+    question.isAnswered = true;
+    return true;
   }
 
   getCurrentQuestion() {
@@ -92,16 +73,36 @@ export class InterviewManager {
 
   getReport() {
     return {
-      user: this.user,
       status: this.status,
-      totalScore: this.questions.reduce((sum, q) => sum + q.score, 0),
       questions: this.questions.map((q) => ({
         id: q.id,
-        text: q.statement,
+        text: q.text,
         answer: q.answer ?? "",
         score: q.score,
         difficulty: q.difficulty,
+        type: q.type,
       })),
     };
+  }
+
+  // ✅ Add a new question dynamically
+  addQuestion(question: BaseQuestion) {
+    const exists = this.questions.some((q) => q.id === question.id);
+    if (exists) return;
+
+    if (this.questions.length >= 6) {
+      return null; // Do not add if already 6 questions
+    }
+
+    const enriched = {
+      ...question,
+      timeLeft: question.timeLeft ?? difficultyTime[question.difficulty] ?? 60, // default fallback
+    };
+
+    this.questions.push(enriched);
+
+    this.currentIndex = this.questions.length - 1;
+
+    return enriched;
   }
 }

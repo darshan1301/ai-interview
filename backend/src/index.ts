@@ -7,6 +7,9 @@ import http from "http";
 import { setupWebSocketServer } from "./utils/wsManager";
 import morgan from "morgan";
 import interviewRouter from "./routes/resume.route";
+import { clearAllInterviewSessions, getInterviewSession } from "./lib/redis";
+import { prisma } from "./lib/db";
+import adminRouter from "./routes/admin.route";
 
 dotenv.config();
 
@@ -25,16 +28,13 @@ app.use(
 app.use(morgan("dev"));
 app.use(express.json({ limit: "1mb" }));
 
-// Simple route
 app.get("/", async (req: Request, res: Response) => {
-  // const data = await questionGenerator();
-  // res.json(data);
-
-  res.send("✅ Server is running!");
+  res.send("API is health");
 });
 
 app.use("/api/user", userRouter);
 app.use("/api/resume", interviewRouter);
+app.use("/api/admin", adminRouter);
 
 const server = http.createServer(app);
 

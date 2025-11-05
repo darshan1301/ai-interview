@@ -1,5 +1,7 @@
+import InterviewerDashboard from "../features/interviewerdashboard";
+
 const Dashboard = () => {
-  return <div>Dashboard</div>;
+  return <InterviewerDashboard />;
 };
 
 export default Dashboard;

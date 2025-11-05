@@ -29,6 +29,7 @@ model User {
   messages   Message[]
 }
 
+
 model Interview {
   id         Int        @id @default(autoincrement())
   userId     Int
@@ -53,6 +54,7 @@ model Question {
   answer      String?
   isAnswered  Boolean   @default(false)
   score       Int       @default(0)
+  createdAt   DateTime  @default(now())
 
   interview   Interview @relation(fields: [interviewId], references: [id])
 }
@@ -68,6 +70,7 @@ model Message {
   interviewId Int
   sender      Sender    @default(CANDIDATE)    
   text        String
+  createdAt   DateTime  @default(now())
 
   user        User      @relation(fields: [userId], references: [id])
   interview   Interview @relation(fields: [interviewId], references: [id])
