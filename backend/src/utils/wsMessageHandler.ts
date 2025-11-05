@@ -171,11 +171,11 @@ export async function handleWSMessage(ws: AuthenticatedWebSocket, raw: string) {
           type: ServerMessageType.COMPLETED,
           status: interview.status,
           score: llmReport?.score,
+          summary: llmReport?.summary,
           questions: interview.questions.map((q) => ({
             id: q.id,
             text: q.text,
             answer: q.answer,
-            summary: llmReport?.summary,
             difficulty: q.difficulty,
             type: q.type,
           })),

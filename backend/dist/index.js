@@ -12,7 +12,7 @@ const http_1 = __importDefault(require("http"));
 const wsManager_1 = require("./utils/wsManager");
 const morgan_1 = __importDefault(require("morgan"));
 const resume_route_1 = __importDefault(require("./routes/resume.route"));
-const redis_1 = require("./lib/redis");
+const admin_route_1 = __importDefault(require("./routes/admin.route"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -24,14 +24,12 @@ app.use((0, cors_1.default)({
 }));
 app.use((0, morgan_1.default)("dev"));
 app.use(express_1.default.json({ limit: "1mb" }));
-app.get("/:interviewId", async (req, res) => {
-    let data = await (0, redis_1.getInterviewSession)(Number(req.params.interviewId));
-    // await clearAllInterviewSessions();
-    res.json(data);
-    // res.send(`✅ Server is running!`);
+app.get("/", async (req, res) => {
+    res.send("API is health");
 });
 app.use("/api/user", user_route_1.default);
 app.use("/api/resume", resume_route_1.default);
+app.use("/api/admin", admin_route_1.default);
 const server = http_1.default.createServer(app);
 // ✅ Attach WebSocket server
 (0, wsManager_1.setupWebSocketServer)(server);

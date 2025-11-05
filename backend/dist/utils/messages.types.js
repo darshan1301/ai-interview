@@ -9,7 +9,7 @@ exports.ClientMessageType = {
     RESUME: "resume",
     GET_INTERVIEW: "get_interview",
     HEARTBEAT: "heartbeat",
-    GET_QUESTION: "GET_QUESTION",
+    GET_QUESTION: "get_question",
     GET_ANSWERED: "get_answered",
 };
 // Server → Client message types

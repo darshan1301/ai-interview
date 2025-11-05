@@ -11,6 +11,7 @@ const openai_1 = __importDefault(require("openai"));
 const db_1 = require("../lib/db");
 const interviewManager_1 = require("../utils/interviewManager");
 const redis_1 = require("../lib/redis");
+const types_1 = require("../utils/types");
 const client = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
 const handleResumeUpload = async (req, res) => {
     try {
@@ -63,7 +64,7 @@ const handleResumeUpload = async (req, res) => {
             return res.status(404).json({ message: "No user found with this email" });
         }
         const interview = await db_1.prisma.interview.create({
-            data: { userId: user.id, status: "ready" },
+            data: { userId: user.id, status: types_1.InterviewStatus.READY },
         });
         const prepareUser = {
             id: user.id,

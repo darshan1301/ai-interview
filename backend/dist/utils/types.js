@@ -13,8 +13,8 @@ exports.Difficulty = {
     HARD: "hard",
 };
 exports.Role = {
-    CANDIDATE: "candidate",
-    INTERVIEWER: "interviewer",
+    CANDIDATE: "CANDIDATE",
+    INTERVIEWER: "INTERVIEWER",
 };
 exports.InterviewStatus = {
     READY: "ready",

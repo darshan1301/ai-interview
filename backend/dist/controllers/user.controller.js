@@ -27,7 +27,6 @@ async function userLogin(req, res) {
             email: user.email,
             role: user.role,
         });
-        console.log(process.env.JWT_SECRET);
         res.cookie("token", token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",

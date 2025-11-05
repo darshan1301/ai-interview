@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.InterviewManager = void 0;
+exports.InterviewManager = exports.difficultyTime = void 0;
 const types_1 = require("./types");
-const difficultyTime = {
-    easy: 5,
+exports.difficultyTime = {
+    easy: 20,
     medium: 60,
     hard: 120,
 };
@@ -15,35 +15,21 @@ class InterviewManager {
     constructor(questions, user) {
         this.questions = questions.map((q) => ({
             ...q,
-            timeLeft: q.timeLeft ?? difficultyTime[q.difficulty],
+            timeLeft: q.timeLeft ?? exports.difficultyTime[q.difficulty],
         }));
         this.user = user;
         this.status = types_1.InterviewStatus.READY;
         this.currentIndex = 0;
     }
-    decrementTimer() {
-        if (this.status !== types_1.InterviewStatus.IN_PROGRESS)
-            return 0;
-        const question = this.questions[this.currentIndex];
-        if (!question)
-            return 0;
-        if (question.timeLeft > 0) {
-            question.timeLeft--;
-        }
-        return question.timeLeft;
-    }
     answer(answer, score = 0) {
         const question = this.questions[this.currentIndex];
         if (!question)
-            return null;
+            return false;
         question.answer = answer;
         question.timeLeft = 0;
         question.score = score;
         question.isAnswered = true;
-        this.currentIndex++;
-        // ❌ Do NOT mark completed here
-        // Just return next if available, else null
-        return this.questions[this.currentIndex] ?? null;
+        return true;
     }
     getCurrentQuestion() {
         if (this.status === types_1.InterviewStatus.COMPLETED)
@@ -78,33 +64,32 @@ class InterviewManager {
     }
     getReport() {
         return {
-            user: this.user,
             status: this.status,
-            totalScore: this.questions.reduce((sum, q) => sum + q.score, 0),
             questions: this.questions.map((q) => ({
                 id: q.id,
                 text: q.text,
                 answer: q.answer ?? "",
                 score: q.score,
                 difficulty: q.difficulty,
+                type: q.type,
             })),
         };
     }
     // ✅ Add a new question dynamically
     addQuestion(question) {
-        // 1. Avoid duplicates by ID
         const exists = this.questions.some((q) => q.id === question.id);
         if (exists)
             return;
-        // 2. Enforce max length (<= 6)
         if (this.questions.length >= 6) {
-            this.questions.shift(); // remove oldest if you want sliding window
+            return null; // Do not add if already 6 questions
         }
-        // 3. Add new with timeLeft if not set
-        this.questions.push({
+        const enriched = {
             ...question,
-            timeLeft: question.timeLeft ?? difficultyTime[question.difficulty],
-        });
+            timeLeft: question.timeLeft ?? exports.difficultyTime[question.difficulty] ?? 60, // default fallback
+        };
+        this.questions.push(enriched);
+        this.currentIndex = this.questions.length - 1;
+        return enriched;
     }
 }
 exports.InterviewManager = InterviewManager;
