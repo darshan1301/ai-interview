@@ -7,8 +7,6 @@ import http from "http";
 import { setupWebSocketServer } from "./utils/wsManager";
 import morgan from "morgan";
 import interviewRouter from "./routes/resume.route";
-import { clearAllInterviewSessions, getInterviewSession } from "./lib/redis";
-import { prisma } from "./lib/db";
 import adminRouter from "./routes/admin.route";
 
 dotenv.config();
