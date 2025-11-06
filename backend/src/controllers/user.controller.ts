@@ -28,10 +28,9 @@ export async function userLogin(req: Request, res: Response) {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain: process.env.NODE_ENV === "production" ? ".devdm.xyz" : undefined,
-      maxAge: 365 * 24 * 60 * 60 * 1000,
+      secure: true,
+      sameSite: "none",
+      
     });
 
     return res.json({
@@ -86,12 +85,11 @@ export async function userSignup(req: Request, res: Response) {
     });
 
     // 6. Set token in cookie
+    
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain: process.env.NODE_ENV === "production" ? ".devdm.xyz" : undefined,
-      maxAge: 365 * 24 * 60 * 60 * 1000,
+      secure: true,
+      sameSite: "none" ,
     });
 
     return res.status(201).json({

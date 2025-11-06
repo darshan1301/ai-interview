@@ -37391,7 +37391,7 @@ var require_prisma = __commonJS({
           "value": "prisma-client-js"
         },
         "output": {
-          "value": "C:\\Users\\User\\Desktop\\swipe-assignment\\backend\\generated\\prisma",
+          "value": "/home/ubuntu/ai-interview/backend/generated/prisma",
           "fromEnvVar": null
         },
         "config": {
@@ -37400,16 +37400,16 @@ var require_prisma = __commonJS({
         "binaryTargets": [
           {
             "fromEnvVar": null,
-            "value": "windows",
+            "value": "linux-arm64-openssl-3.0.x",
             "native": true
           }
         ],
         "previewFeatures": [],
-        "sourceFilePath": "C:\\Users\\User\\Desktop\\swipe-assignment\\backend\\prisma\\schema.prisma",
+        "sourceFilePath": "/home/ubuntu/ai-interview/backend/prisma/schema.prisma",
         "isCustomOutput": true
       },
       "relativeEnvPaths": {
-        "rootEnvPath": null,
+        "rootEnvPath": "../../.env",
         "schemaEnvPath": "../../.env"
       },
       "relativePath": "../../prisma",
@@ -37419,6 +37419,7 @@ var require_prisma = __commonJS({
         "db"
       ],
       "activeProvider": "postgresql",
+      "postinstall": true,
       "inlineDatasources": {
         "db": {
           "url": {
@@ -37456,8 +37457,8 @@ var require_prisma = __commonJS({
     var PrismaClient2 = getPrismaClient2(config);
     exports2.PrismaClient = PrismaClient2;
     Object.assign(exports2, Prisma);
-    path3.join(__dirname, "query_engine-windows.dll.node");
-    path3.join(process.cwd(), "generated/prisma/query_engine-windows.dll.node");
+    path3.join(__dirname, "libquery_engine-linux-arm64-openssl-3.0.x.so.node");
+    path3.join(process.cwd(), "generated/prisma/libquery_engine-linux-arm64-openssl-3.0.x.so.node");
     path3.join(__dirname, "schema.prisma");
     path3.join(process.cwd(), "generated/prisma/schema.prisma");
   }
@@ -99260,7 +99261,7 @@ var PORT = process.env.PORT || 5e3;
 var interviewSessions = /* @__PURE__ */ new Map();
 app.use(
   (0, import_cors.default)({
-    origin: true,
+    origin: process.env.ALLOWED_ORIGIN,
     credentials: true
   })
 );

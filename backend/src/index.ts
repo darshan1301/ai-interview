@@ -21,7 +21,7 @@ export const interviewSessions = new Map<number, InterviewManager>();
 // Middleware
 app.use(
   cors({
-    origin: true,
+    origin: process.env.ALLOWED_ORIGIN,
     credentials: true,
   })
 );

@@ -43,7 +43,6 @@ export const isAuthenticated = (
     const cookies = cookie.parse(req.headers.cookie);
     token = cookies.token; // cookie name: "token"
   }
-
   if (!token) {
     return res
       .status(401)
