@@ -69,7 +69,7 @@ export const handleResumeUpload = async (req: Request, res: Response) => {
     }
 
     const interview = await prisma.interview.create({
-      data: { userId: user.id, status: InterviewStatus.READY },
+      data: { userId: user.id, status: InterviewStatus.IN_PROGRESS },
     });
 
     const prepareUser = {

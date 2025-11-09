@@ -48,3 +48,38 @@ export const getPaginatedInterviews = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+export const getInterviewById = async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.interviewId;
+    const interview = await prisma.interview.findUnique({
+      where: { id: Number(interviewId) },
+      include: { questions: true, user: true },
+    });
+    if (!interview) {
+      return res.status(404).json({ error: "Interview not found" });
+    }
+    res.json({
+      user: {
+        id: interview.user.id,
+        name: interview.user.name,
+        email: interview.user.email,
+      },
+      interviewId: interview.id,
+      status: interview.status,
+      summary: interview.summary,
+      score: interview.score,
+      questions: interview.questions.map((q) => ({
+        id: q.id,
+        text: q.text,
+        answer: q.answer,
+        score: q.score,
+        difficulty: q.difficulty,
+        type: q.type,
+      })),
+    });
+  } catch (err) {
+    console.error("❌ Failed to fetch interview:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};

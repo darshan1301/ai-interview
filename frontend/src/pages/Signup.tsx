@@ -21,7 +21,7 @@ const Signup = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include", // ✅ send/receive cookies
+        credentials: "include",
         body: JSON.stringify({ name, email, password, adminSecret }),
       });
 

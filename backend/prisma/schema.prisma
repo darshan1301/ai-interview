@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -13,65 +7,61 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-enum Role {
-  CANDIDATE
-  INTERVIEWER
-}
 
 model User {
-  id        Int        @id @default(autoincrement())
-  email     String     @unique
-  name      String
-  password  String
-  role      Role      @default(CANDIDATE)     
-
+  id         Int         @id @default(autoincrement())
+  email      String      @unique
+  name       String
+  password   String
+  role       Role        @default(CANDIDATE)
   interviews Interview[]
-  messages   Message[]
+  Message    Message[]
 }
 
-
 model Interview {
-  id         Int        @id @default(autoincrement())
-  userId     Int
-  score      Int        @default(0)
-  status     String
-  startTime  DateTime   @default(now())
-  endTime    DateTime?
-  totalTime  Int?
-  summary    String?
-
-  user       User       @relation(fields: [userId], references: [id])
-  questions  Question[]
-  messages   Message[]
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  score     Int        @default(0)
+  status    String
+  startTime DateTime   @default(now())
+  endTime   DateTime?
+  totalTime Int?
+  summary   String?
+  user      User       @relation(fields: [userId], references: [id])
+  Message   Message[]
+  questions Question[]
 }
 
 model Question {
   id          Int       @id @default(autoincrement())
   interviewId Int
   text        String
-  difficulty  String    
-  type        String    
+  difficulty  String
+  type        String
   answer      String?
   isAnswered  Boolean   @default(false)
   score       Int       @default(0)
   createdAt   DateTime  @default(now())
-
   interview   Interview @relation(fields: [interviewId], references: [id])
-}
-
-enum Sender {
-  CANDIDATE
-  BOT
 }
 
 model Message {
   id          Int       @id @default(autoincrement())
   userId      Int
   interviewId Int
-  sender      Sender    @default(CANDIDATE)    
+  sender      Sender    @default(CANDIDATE)
   text        String
   createdAt   DateTime  @default(now())
+  Interview   Interview @relation(fields: [interviewId], references: [id])
+  User        User      @relation(fields: [userId], references: [id])
+}
 
-  user        User      @relation(fields: [userId], references: [id])
-  interview   Interview @relation(fields: [interviewId], references: [id])
+enum Role {
+  CANDIDATE
+  INTERVIEWER
+}
+
+enum Sender {
+  CANDIDATE
+  BOT
 }
